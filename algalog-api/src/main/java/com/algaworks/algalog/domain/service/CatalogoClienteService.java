@@ -1,5 +1,8 @@
 package com.algaworks.algalog.domain.service;
 
+import com.algaworks.algalog.api.mapper.ClienteMapper;
+import com.algaworks.algalog.api.model.request.ClienteInput;
+import com.algaworks.algalog.api.model.response.ClienteOutput;
 import com.algaworks.algalog.domain.exception.NegocioException;
 import com.algaworks.algalog.domain.model.Cliente;
 import com.algaworks.algalog.domain.repository.ClienteRepository;
@@ -16,54 +19,70 @@ import java.util.Optional;
 public class CatalogoClienteService {
 
     private ClienteRepository clienteRepository;
+    private ClienteMapper clienteMapper;
 
-    @Transactional
-    public List<Cliente> listar() {
-        return clienteRepository.findAll();
+    public Cliente procurar(Long clienteId) {
+        return clienteRepository.findById(clienteId)
+                .orElseThrow(() -> new NegocioException("Cliente não encontrado."));
     }
 
     @Transactional
-    public ResponseEntity<Cliente> buscar(Long clienteId) {
+    public List<ClienteOutput> listar() {
+        List<ClienteOutput> listagemClientes = clienteMapper
+                .toCollectionModel(clienteRepository.findAll());
+
+        return listagemClientes;
+    }
+
+    @Transactional
+    public ResponseEntity<ClienteOutput> buscar(Long clienteId) {
         return clienteRepository.findById(clienteId)
-                .map(cliente -> ResponseEntity.ok(cliente))
+                .map(cliente -> clienteMapper.toModel(cliente))
+                .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @Transactional
-    public Cliente criar(Cliente cliente) {
-        boolean emailEmUso = clienteRepository.findByEmail(cliente.getEmail())
+    public ClienteOutput criar(ClienteInput clienteInput) {
+        boolean emailEmUso = clienteRepository.findByEmail(clienteInput.getEmail())
                 .stream()
-                .anyMatch(clienteExistente -> !clienteExistente.equals(cliente));
+                .anyMatch(clienteExistente -> !clienteExistente.equals(clienteInput));
 
         if (emailEmUso) {
             throw new NegocioException("O e-mail inserido já está em uso por outro usuário.");
         }
 
-        return clienteRepository.save(cliente);
+        Cliente novoCliente = clienteRepository.save(clienteMapper.toEntity(clienteInput));
+
+        return clienteMapper.toModel(novoCliente);
     }
 
     @Transactional
-    public ResponseEntity<Cliente> atualizar(Long clienteId, Cliente cliente) {
+    public ResponseEntity<ClienteOutput> atualizar(Long clienteId, ClienteInput clienteInput) {
         if (!clienteRepository.existsById(clienteId))
             return ResponseEntity.notFound().build();
 
-        cliente.setId(clienteId);
-        clienteRepository.save(cliente);
+        Cliente clienteAtualizado = clienteMapper.toEntity(clienteInput);
 
-        return ResponseEntity.ok(cliente);
+        clienteAtualizado.setId(clienteId);
+
+        clienteRepository.save(clienteAtualizado);
+
+        return ResponseEntity.ok(clienteMapper.toModel(clienteAtualizado));
     }
 
     @Transactional
-    public ResponseEntity<Cliente> excluir(Long clienteId) {
+    public ResponseEntity<ClienteOutput> excluir(Long clienteId) {
         if (!clienteRepository.existsById(clienteId)) {
             return ResponseEntity.notFound().build();
         }
 
-        Optional<Cliente> cliente = clienteRepository.findById(clienteId);
+        ClienteOutput clienteDeletado = clienteMapper.toModel(clienteRepository
+                .findById(clienteId).get());
 
         clienteRepository.deleteById(clienteId);
 
-        return ResponseEntity.ok(cliente.get());
+        return ResponseEntity.ok(clienteDeletado);
     }
 
 }
